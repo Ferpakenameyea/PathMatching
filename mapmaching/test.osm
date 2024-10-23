@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="java">
+    <bounds minlat="40" minlon="116.438876" maxlat="40.02" maxlon="116.439015"/>
+
+    <node id="0" visible="true" version="1" lat="40.014331" lon="116.438877" />
+    <node id="1" visible="true" version="1" lat="40.013719" lon="116.439014" />
+
+    <way id="60560341225" visible="true" version="1">
+        <nd ref="0"/>
+        <nd ref="1"/>
+        <tag k="highway" v="residential"/>
+        <tag k="name" v="street"/>
+        <tag k="maxspeed" v="50"/>
+    </way>
+</osm>
