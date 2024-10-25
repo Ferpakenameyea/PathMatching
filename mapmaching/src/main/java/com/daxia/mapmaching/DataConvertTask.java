@@ -54,7 +54,7 @@ public class DataConvertTask implements Runnable {
                 var lon = Double.parseDouble(lonlat[0]);
                 var lat = Double.parseDouble(lonlat[1]);
                 points.add(new GHPoint(lat, lon));
-                var timeString = array[array.length - 1];
+                var timeString = array[array.length - 1].trim();
                 timeStamps.add(parseToUnixStamp(timeString));
             });
         
@@ -70,7 +70,7 @@ public class DataConvertTask implements Runnable {
             logger.warn("impossible route!");
             return;
         }
-        
+
         long startTime = timeStamps.get(0);
         long endTime = timeStamps.get(timeStamps.size() - 1);
 

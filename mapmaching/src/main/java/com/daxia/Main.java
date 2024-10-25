@@ -39,104 +39,79 @@ public class Main {
     private static int idCnt=0;
     private static String idIn;
     public static void main(String[] args) throws Exception {
-        var profile = new Profile("car").setVehicle("car").setWeighting("fastest");
-        var hopper = new GraphHopper();
-        hopper.setOSMFile(osmFile);
-        hopper.setGraphHopperLocation(graphHopperDirectory);
-        hopper.setProfiles(profile);
-        hopper.importOrLoad();
-
-        var graph = hopper.getBaseGraph();
-        logger.info("there are " + graph.getEdges() + " edges");
-        logger.info("there are " + graph.getNodes() + " nodes");
-
-        ThreadLocal<MapMatching> threadLocal = ThreadLocal.withInitial(() -> MapMatching.fromGraphHopper(hopper, new PMap().putObject("profile", "car").putObject("maxDistance", "10")));
-        var lines = Files.readAllLines(Path.of(inputFile));
-
-        // 创建线程池
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(
-                Runtime.getRuntime().availableProcessors() * 2,
-                Runtime.getRuntime().availableProcessors() * 4,
-                2,
-                TimeUnit.MINUTES,
-                new LinkedBlockingDeque<>());
-
-        List<String> datas = null;
-        var iterator = lines.iterator();
-        String currentID = null;
+        ThreadLocal<GraphHopper> hopperLocal = ThreadLocal.withInitial(() -> {
+            var profile = new Profile("car").setVehicle("car").setWeighting("fastest");
+            var hopper = new GraphHopper();
+            hopper.setOSMFile(osmFile);
+            hopper.setGraphHopperLocation(graphHopperDirectory);
+            hopper.setProfiles(profile);
+            hopper.importOrLoad();
+            
+            return hopper;
+        });
+        ThreadLocal<Logger> loggerLocal = ThreadLocal.withInitial(() -> LogManager.getLogger(Thread.currentThread().getName()));
 
         List<String> results = new ArrayList<>();
+        
+        // 创建线程池
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+            Runtime.getRuntime().availableProcessors() * 2,
+            Runtime.getRuntime().availableProcessors() * 4,
+            2,
+            TimeUnit.MINUTES,
+            new LinkedBlockingDeque<>());
+            
+            
+        // 正式读取文件
+        var lines = Files.readAllLines(Path.of(inputFile));
+        String currentName = null;
+        List<String> rawDatas = new ArrayList<>();
+        int total = 0;
 
-        while (iterator.hasNext()) {
-            String line = iterator.next().trim();
-            //获取id，例如：6d420c983dc4ad2cffb51f647c4361dd_20240101003001
-            String id = line.substring(0, line.indexOf(',', 0));
-            //System.out.println(id);
-            if (currentID == null) {
-                currentID = id;
-                datas = new ArrayList<>();
-
-                datas.add(line);
+        for (var line : lines) {
+            var name = line.substring(0, line.indexOf(',', 0));
+            if (currentName == null) {
+                currentName = name;
+                rawDatas.add(line);
                 continue;
-            }
+            } 
 
-            if (currentID.equals(id)) {
-                datas.add(line);
+            if (currentName.equals(name)) {
+                rawDatas.add(line);
             } else {
-                //一个datas构造结束
-                var strings = datas.get(0).split(",");
-                var ids=strings[0].split("_");
-                String usrId=ids[0];
-                if(!usr2UsrId.containsKey(usrId)){
-                    usr2UsrId.put(usrId,++idCnt);
-                    idIn=String.valueOf(idCnt)+".0";
-                }else{
-                    idIn=String.valueOf(usr2UsrId.get(usrId))+".0";
-                }
-                //datas是id相同的一组行
-                // executor.submit(new DataConvertTask(
-                //         trajIDSupply,
-                //         userIDSupply,
-                //         dataIDSupply,
-                //         usr2TrajId,
-                //         idIn,
-                //         datas,
-                //         results,
-                //         threadLocal,
-                //         hopper.getBaseGraph().getNodeAccess()));
+                executor.submit(new DataConvertTask(
+                    results, 
+                    rawDatas, 
+                    hopperLocal, 
+                    loggerLocal));
+                total++;
 
-                currentID = id;
-                datas = new ArrayList<>();
-                datas.add(line);
-                //break;
-
+                currentName = null;
+                rawDatas = new ArrayList<>();
             }
         }
-        var strings = datas.get(0).split(",");
-        var ids=strings[0].split("_");
-        String usrId=ids[0];
-        if(!usr2UsrId.containsKey(usrId)){
-            usr2UsrId.put(usrId,++idCnt);
-            idIn=String.valueOf(idCnt)+".0";
-        }else{
-            idIn=String.valueOf(usr2UsrId.get(usrId))+".0";
+        if (!rawDatas.isEmpty()) {
+            executor.submit(new DataConvertTask(
+                results, 
+                rawDatas, 
+                hopperLocal, 
+                loggerLocal));
+            total++;
         }
-        // executor.submit(new DataConvertTask(
-        //         trajIDSupply,
-        //         userIDSupply,
-        //         dataIDSupply,
-        //         usr2TrajId,
-        //         idIn,
-        //         datas,
-        //         results,
-        //         threadLocal,
-        //         hopper.getBaseGraph().getNodeAccess()));
-                
+
+        executor.shutdown();
+
         try {
             executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+        
+        logger.info(String.format("processed %d rawdatas, success: %d, failure: %d, success rate: %f",
+            total, 
+            results.size(),
+            total - results.size(),
+            (double)results.size() / total));;
         //1.0;[59566331310, 5956643292, 59566344907];[1704086438, 1704086438, 1704087202];1.0;2.0;1.0;2024-01-01
         //1.0;[59566331310, 5956643292, 59566344907];[1704086438, 1704086438, 1704087202];1.0;2.0;1.0;2024-01-01
         // 获取results内容
