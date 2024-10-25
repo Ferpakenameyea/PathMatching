@@ -1,8 +1,6 @@
 package com.daxia;
 
-import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,14 +8,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import javax.xml.stream.XMLStreamException;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -27,10 +21,7 @@ import com.daxia.mapmaching.IDSupplier;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.config.Profile;
 import com.graphhopper.util.PMap;
-import com.graphhopper.matching.EdgeMatch;
 import com.graphhopper.matching.MapMatching;
-import com.graphhopper.matching.MatchResult;
-import com.graphhopper.storage.NodeAccess;
 
 public class Main {
 
@@ -103,16 +94,16 @@ public class Main {
                     idIn=String.valueOf(usr2UsrId.get(usrId))+".0";
                 }
                 //datas是id相同的一组行
-                executor.submit(new DataConvertTask(
-                        trajIDSupply,
-                        userIDSupply,
-                        dataIDSupply,
-                        usr2TrajId,
-                        idIn,
-                        datas,
-                        results,
-                        threadLocal,
-                        hopper.getBaseGraph().getNodeAccess()));
+                // executor.submit(new DataConvertTask(
+                //         trajIDSupply,
+                //         userIDSupply,
+                //         dataIDSupply,
+                //         usr2TrajId,
+                //         idIn,
+                //         datas,
+                //         results,
+                //         threadLocal,
+                //         hopper.getBaseGraph().getNodeAccess()));
 
                 currentID = id;
                 datas = new ArrayList<>();
@@ -130,18 +121,17 @@ public class Main {
         }else{
             idIn=String.valueOf(usr2UsrId.get(usrId))+".0";
         }
-        executor.submit(new DataConvertTask(
-                trajIDSupply,
-                userIDSupply,
-                dataIDSupply,
-                usr2TrajId,
-                idIn,
-                datas,
-                results,
-                threadLocal,
-                hopper.getBaseGraph().getNodeAccess()));
-        executor.shutdown();
-
+        // executor.submit(new DataConvertTask(
+        //         trajIDSupply,
+        //         userIDSupply,
+        //         dataIDSupply,
+        //         usr2TrajId,
+        //         idIn,
+        //         datas,
+        //         results,
+        //         threadLocal,
+        //         hopper.getBaseGraph().getNodeAccess()));
+                
         try {
             executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
         } catch (InterruptedException e) {
