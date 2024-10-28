@@ -1,5 +1,6 @@
 package com.daxia.mapmaching;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -14,19 +15,29 @@ import com.graphhopper.util.Parameters;
 import com.graphhopper.util.shapes.GHPoint;
 
 public class DataConvertTask implements Runnable {
-    
+    private final IDSupplier trajIDSupply;
+    private final IDSupplier userIDSupply;
+    private final IDSupplier dataIDSupply;
+    private String usrId;
     private final List<String> resultDest;
     private final List<String> rawData;
     private final GraphHopper graphHopper;
     private final Logger logger;
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
+
     public DataConvertTask(
+        IDSupplier trajIDSupply,
+        IDSupplier userIDSupply,
+        IDSupplier dataIDSupply,
         List<String> resultDest,
         List<String> rawData,
         ThreadLocal<GraphHopper> graphHopper,
-        ThreadLocal<Logger> logger) 
+        ThreadLocal<Logger> logger)
     {
+        this.trajIDSupply = trajIDSupply;
+        this.userIDSupply = userIDSupply;
+        this.dataIDSupply = dataIDSupply;
         this.resultDest = resultDest;
         this.rawData = rawData;
         this.graphHopper = graphHopper.get();
@@ -54,8 +65,8 @@ public class DataConvertTask implements Runnable {
                 var lon = Double.parseDouble(lonlat[0]);
                 var lat = Double.parseDouble(lonlat[1]);
                 points.add(new GHPoint(lat, lon));
-                var timeString = array[array.length - 1].trim();
-                timeStamps.add(parseToUnixStamp(timeString));
+                var timeString = array[array.length - 1];
+                timeStamps.add(parseToUnixStamp(timeString.trim()));
             });
         
         GHRequest request = new GHRequest(points)
@@ -70,13 +81,17 @@ public class DataConvertTask implements Runnable {
             logger.warn("impossible route!");
             return;
         }
-
+        
         long startTime = timeStamps.get(0);
         long endTime = timeStamps.get(timeStamps.size() - 1);
 
         timeStamps.clear();
 
-        var instructions = result.getBest().getInstructions();
+        var instructions = result.getBest().getInstructions()
+            .stream()
+            .filter(instruction -> !instruction.getName().isBlank())
+            .toList();
+            
         var size = instructions.size();
         var timeNow = startTime;
 
@@ -93,12 +108,41 @@ public class DataConvertTask implements Runnable {
                 timeNow += instruction.getTime() / 1000;
             }
         }
-
+        //System.out.println(size+" "+timeStamps.size());
         StringBuilder builder = new StringBuilder();
         // TODO: 做一些处理工作，把它转换成一行字符串
-        
+        //timeStamps时间戳,instructions路段号
+        builder.append(dataIDSupply.getNew());
+        builder.append(".0;[");
+
+        final var locationIterator = roadIDs.listIterator();
+        while(locationIterator.hasNext()) {
+            builder.append(locationIterator.next());
+            if (locationIterator.hasNext()) {
+                builder.append(", ");
+            }
+        }
+        builder.append("];[");
+        final var tlistIterator = timeStamps.listIterator();
+        while(tlistIterator.hasNext()) {
+            builder.append(tlistIterator.next());
+            if (tlistIterator.hasNext()) {
+                builder.append(", ");
+            }
+        }
+        builder.append("];");
+        builder.append(userIDSupply.getNew());
+        builder.append(";");
+        builder.append(trajIDSupply.getNew());
+        builder.append(".0");
+        builder.append(";1.0;");
+        String subTime = String.valueOf(startTime).substring(0, 8); // 提取前8位
+        LocalDate date = LocalDate.parse(subTime, DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String formattedDate = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        builder.append(formattedDate);
         synchronized(resultDest) {
             resultDest.add(builder.toString());
         }
+        return;
     }
 }

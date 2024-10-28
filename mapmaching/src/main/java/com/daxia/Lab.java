@@ -76,8 +76,8 @@ public class Lab {
 
         List<GHPoint> list = Arrays.asList(
                 // 前面是纬度(0~90)，后面是经度(0~180)
-                new GHPoint(39.904, 116.544),
-                new GHPoint(39.904, 116.549));
+                new GHPoint(39.904, 116.549),
+                new GHPoint(39.904, 116.544));
 
         var result = hopper.route(new GHRequest(list)
             .setProfile("car")
