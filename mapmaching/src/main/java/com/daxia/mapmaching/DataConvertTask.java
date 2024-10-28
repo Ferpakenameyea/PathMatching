@@ -27,6 +27,7 @@ public class DataConvertTask implements Runnable {
     private final GraphHopper graphHopper;
     private final Logger logger;
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private final ThreadLocal<MapMatching> mapMatchingLocal = new ThreadLocal<>();
 
 
     public DataConvertTask(
@@ -86,7 +87,14 @@ public class DataConvertTask implements Runnable {
         timeStamps.clear();
         
         try {
-            var edges = MapMatching.fromGraphHopper(graphHopper, new PMap().putObject("profile", "car").putObject("maxDistance", "10"))
+            MapMatching mapMatching;
+
+            if ((mapMatching = mapMatchingLocal.get()) == null) {
+                mapMatching = MapMatching.fromGraphHopper(graphHopper, new PMap().putObject("profile", "car").putObject("maxDistance", "10"));
+                mapMatchingLocal.set(mapMatching);
+            }
+
+            var edges = mapMatching
                 .match(points.stream().map(Observation::new).toList())
                 .getMergedPath()
                 .calcEdges();
