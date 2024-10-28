@@ -12,16 +12,13 @@ import javax.xml.stream.XMLStreamException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import com.carrotsearch.hppc.cursors.IntCursor;
 import com.graphhopper.GHRequest;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.config.Profile;
-import com.graphhopper.matching.EdgeMatch;
 import com.graphhopper.matching.MapMatching;
 import com.graphhopper.matching.Observation;
 import com.graphhopper.reader.ReaderElement;
 import com.graphhopper.reader.osm.OSMInputFile;
-import com.graphhopper.routing.Path.EdgeVisitor;
 import com.graphhopper.util.EdgeIteratorState;
 import com.graphhopper.util.PMap;
 import com.graphhopper.util.Parameters;

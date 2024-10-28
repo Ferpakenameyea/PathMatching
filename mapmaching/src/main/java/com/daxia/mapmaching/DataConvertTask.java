@@ -11,6 +11,9 @@ import org.apache.log4j.Logger;
 
 import com.graphhopper.GHRequest;
 import com.graphhopper.GraphHopper;
+import com.graphhopper.matching.MapMatching;
+import com.graphhopper.matching.Observation;
+import com.graphhopper.util.PMap;
 import com.graphhopper.util.Parameters;
 import com.graphhopper.util.shapes.GHPoint;
 
@@ -57,6 +60,8 @@ public class DataConvertTask implements Runnable {
         List<String> roadIDs = new ArrayList<>();
         List<Long> timeStamps = new ArrayList<>();
 
+        Wrapper<String> startDatetimeTimestamp = new Wrapper<>();
+
         // 预处理成列表形式
         rawData.stream()
             .map(s -> s.split(","))
@@ -67,47 +72,51 @@ public class DataConvertTask implements Runnable {
                 points.add(new GHPoint(lat, lon));
                 var timeString = array[array.length - 1];
                 timeStamps.add(parseToUnixStamp(timeString.trim()));
+                
+                if (startDatetimeTimestamp.value == null) {
+                    startDatetimeTimestamp.value = timeString; 
+                } 
             });
-        
-        GHRequest request = new GHRequest(points)
-            .setProfile("car")
-            .setAlgorithm(Parameters.Algorithms.ASTAR)
-            .setLocale("zh");
-
-        // 交给 Graphhopper 进行导航
-        var result = graphHopper.route(request);
-        
-        if (result.getAll().isEmpty() || result.getBest().isImpossible()) {
-            logger.warn("impossible route!");
-            return;
-        }
         
         long startTime = timeStamps.get(0);
         long endTime = timeStamps.get(timeStamps.size() - 1);
+        long elapsed = endTime - startTime;
+        long now = startTime;
 
         timeStamps.clear();
+        
+        try {
+            var edges = MapMatching.fromGraphHopper(graphHopper, new PMap().putObject("profile", "car").putObject("maxDistance", "10"))
+                .match(points.stream().map(Observation::new).toList())
+                .getMergedPath()
+                .calcEdges();
 
-        var instructions = result.getBest().getInstructions()
-            .stream()
-            .filter(instruction -> !instruction.getName().isBlank())
-            .toList();
-            
-        var size = instructions.size();
-        var timeNow = startTime;
+            double totalLength = 0;
 
-        for (int i = 0; i < size; i++) {
-            var instruction = instructions.get(i);
-            roadIDs.add(instruction.getName());
-            if (i == size - 1) {
-                timeStamps.add(endTime);
-            } else {
-                timeStamps.add(timeNow);
-                // instruction.getTime() 是指在这段道路上的预计行驶时间
-                // 单位为 ms
-                // FIXME: 这里不太确定
-                timeNow += instruction.getTime() / 1000;
+            for (int i = 0; i < edges.size(); i++) {
+                totalLength += edges.get(i).getDistance();
             }
+            
+            for (int i = 0; i < edges.size(); i++) {
+                var id = edges.get(i).getName();
+                if (!roadIDs.isEmpty() && roadIDs.get(roadIDs.size() - 1).equals(id)) {
+                    // merge
+                    timeStamps.set(
+                        timeStamps.size() - 1, 
+                        now);
+                } else {
+                    roadIDs.add(edges.get(i).getName());
+                    timeStamps.add(now);
+                }
+                now += (edges.get(i).getDistance() / totalLength) * elapsed;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            logger.warn("Impossible mapmatching!");
+
+            return;
         }
+
         //System.out.println(size+" "+timeStamps.size());
         StringBuilder builder = new StringBuilder();
         // TODO: 做一些处理工作，把它转换成一行字符串
@@ -136,7 +145,7 @@ public class DataConvertTask implements Runnable {
         builder.append(trajIDSupply.getNew());
         builder.append(".0");
         builder.append(";1.0;");
-        String subTime = String.valueOf(startTime).substring(0, 8); // 提取前8位
+        String subTime = startDatetimeTimestamp.value.substring(0, 8); // 提取前8位
         LocalDate date = LocalDate.parse(subTime, DateTimeFormatter.ofPattern("yyyyMMdd"));
         String formattedDate = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         builder.append(formattedDate);
@@ -144,5 +153,9 @@ public class DataConvertTask implements Runnable {
             resultDest.add(builder.toString());
         }
         return;
+    }
+
+    private class Wrapper<T> {
+        public T value;
     }
 }

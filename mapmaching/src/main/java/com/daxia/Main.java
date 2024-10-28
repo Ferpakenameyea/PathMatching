@@ -20,8 +20,6 @@ import com.daxia.mapmaching.DataConvertTask;
 import com.daxia.mapmaching.IDSupplier;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.config.Profile;
-import com.graphhopper.util.PMap;
-import com.graphhopper.matching.MapMatching;
 
 public class Main {
 
@@ -55,18 +53,20 @@ public class Main {
 
         // 创建线程池
         ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                Runtime.getRuntime().availableProcessors() * 1,
                 Runtime.getRuntime().availableProcessors() * 2,
-                Runtime.getRuntime().availableProcessors() * 4,
                 2,
                 TimeUnit.MINUTES,
                 new LinkedBlockingDeque<>());
-
 
         // 正式读取文件
         var lines = Files.readAllLines(Path.of(inputFile));
         String currentName = null;
         List<String> rawDatas = new ArrayList<>();
         int total = 0;
+
+        logger.info("starting...");
+        long start = System.currentTimeMillis();
 
         for (var line : lines) {
             var name = line.substring(0, line.indexOf(',', 0));
@@ -107,17 +107,22 @@ public class Main {
 
         executor.shutdown();
 
+        printProgressUntilEnd(total, results, 1000, start);
+
+        long end = System.currentTimeMillis();
+
         try {
             executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
 
-        logger.info(String.format("processed %d rawdatas, success: %d, failure: %d, success rate: %f",
+        logger.info(String.format("processed %d rawdatas, success: %d, failure: %d, success rate: %f, elapsed: %d ms!",
                 total,
                 results.size(),
                 total - results.size(),
-                (double)results.size() / total));;
+                (double)results.size() / total, 
+                end - start));
         //1.0;[59566331310, 5956643292, 59566344907];[1704086438, 1704086438, 1704087202];1.0;2.0;1.0;2024-01-01
         //1.0;[59566331310, 5956643292, 59566344907];[1704086438, 1704086438, 1704087202];1.0;2.0;1.0;2024-01-01
         // 获取results内容
@@ -147,7 +152,7 @@ public class Main {
             pw.println();
         }
         for (int j=0;j<results.size();j++) {
-            System.out.println(results.get(j));
+            // System.out.println(results.get(j));
             List<String> grids=new ArrayList<>();
             String[] semicParts = results.get(j).split(";");
             String[] locArray = semicParts[1].substring(1, semicParts[1].length() - 1).split(",");
@@ -204,5 +209,57 @@ public class Main {
         //}
 
         logger.info("done!");
+    }
+
+    private static void printProgressUntilEnd(int total, List<String> resultSet, int loopDelayMilliSeconds, long start) {
+        StringBuilder builder = new StringBuilder();
+        boolean first = true;
+        
+        while (true) {
+            int size = resultSet.size();
+
+            builder.append("[PROGRESS] [");
+            int len = (int)(10 * ((double)size / total));
+            for (int i = 0; i < 10; i++) {
+                builder.append(i < len ? '=' : '-');
+            }
+            builder.append("] ");
+            builder.append(size);
+            builder.append(" of ");
+            builder.append(total);
+
+            long now = System.currentTimeMillis();
+            double elapsedSeconds = (double)(now - start) / 1000;
+            
+            builder.append(" elapsed: ");
+            builder.append(elapsedSeconds);
+            builder.append(" s |estimate: ");
+
+            double dataPerSecond = size / elapsedSeconds;
+            double estimate = (total - size) / dataPerSecond;
+
+            builder.append(estimate);
+            builder.append("s");
+
+            if (first) {
+                first = false;
+            } else {
+                clearLastLine();
+            }
+            logger.info(builder.toString());
+
+            if (size == total) {
+                break;
+            }
+
+            builder.setLength(0);
+            try {
+                Thread.sleep(loopDelayMilliSeconds);
+            } catch (Exception e) {}
+        }
+    }
+
+    private static void clearLastLine() {
+        System.out.print("\033[F\033[K"); // ANSI 转义码，清除行
     }
 }
